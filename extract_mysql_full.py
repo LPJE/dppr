@@ -6,7 +6,6 @@ import configparser
 import logging
 from contextlib import contextmanager
 from file_and_directory_check import check_directory_and_file
-import logging
 import csv
 
 # Create a logger object
@@ -41,6 +40,7 @@ file_name="pipeline.conf"
 
 expected_directory = directory
 expected_file_name = file_name
+# Need to make this to stop program if check fails
 check_directory_and_file(expected_directory, file_name)
 
 
@@ -102,3 +102,20 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# load data to S3 bucket
+
+parser = configparser.ConfigParser()
+parser.read("pipeline.conf")
+access_key = parser.get("aws_boto_credentials", "access_key")
+secret_key =  parser.get("aws_boto_credentials","secret_key")
+bucket_name = parser.get("aws_boto_credentials", "bucket_name")
+
+s3 = boto.clent('s3',
+                aws_access_key = access_key,
+                aws_secret_access_key = secret_key
+                )
+s3_file = local_filename
+
+s3.upload_file(local_filename, bucket_name, s3_file)
