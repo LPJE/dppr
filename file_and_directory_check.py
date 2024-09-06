@@ -2,22 +2,20 @@ import os
 import logging
 from typing import Optional
 
-# HOW DO i print out docstrings
-
 # Create a logger object
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # Create a file handler to log messages to a file
-file_handler = logging.FileHandler('file_check.log')
-file_handler.setLevel(logging.INFO)
+file_handler = logging.FileHandler('./logs/file_check.log')
+file_handler.setLevel(logging.DEBUG)
 
 # Create a console handler to print messages to the terminal
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 
 # Create a formatter for the log messages
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
+formatter = logging.Formatter('%(name)s - %(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 # Add the formatter to both handlers
 file_handler.setFormatter(formatter)
@@ -26,7 +24,6 @@ console_handler.setFormatter(formatter)
 # Add both handlers to the logger
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
-
 
 def check_directory_and_file(expected_directory: str, file_name: str) -> Optional[None]:
     """
@@ -61,6 +58,8 @@ def check_directory_and_file(expected_directory: str, file_name: str) -> Optiona
 
 
 # Example usage
-expected_directory = "/path/to/your/directory"
-file_name = "your_file.txt"
-check_directory_and_file(expected_directory, file_name)
+
+if __name__ == "__main__":
+  expected_directory = "/path/to/your/directory"
+  file_name = "your_file.txt"
+  check_directory_and_file(expected_directory, file_name)
