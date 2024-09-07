@@ -1,64 +1,61 @@
-# Review codebase AS IS
-# Set up S3 and relevant connection
-
-import pymysql
+import csv
 import configparser
 import logging
 from contextlib import contextmanager
+import boto3
+import pymysql
 from file_and_directory_check import check_directory_and_file
-import csv
-
-# Create a logger object
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-# Create a file handler to log messages to a file
-file_handler = logging.FileHandler('./logs/main_file.log')
-file_handler.setLevel(logging.DEBUG)
-
-# Create a console handler to print messages to the terminal
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-
-# Create a formatter for the log messages
-formatter = logging.Formatter('%(name)s - %(lineno)d - %(asctime)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
-
-# Add the formatter to both handlers
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-
-# Add both handlers to the logger
-logger.addHandler(file_handler)
-logger.addHandler(console_handler)
 
 
+def setup_logging():
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+
+    file_handler = logging.FileHandler('./logs/main_file.log')
+    file_handler.setLevel(logging.DEBUG)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+
+    formatter = logging.Formatter('%(name)s - %(lineno)d - %(asctime)s - %(levelname)s - %(message)s',
+                                  datefmt='%Y-%m-%d %H:%M:%S')
+
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    return logger
 
 
-# Directory and File Check
-directory="./"
-file_name="pipeline.conf"
-
-expected_directory = directory
-expected_file_name = file_name
-# Need to make this to stop program if check fails
-check_directory_and_file(expected_directory, file_name)
+logger = setup_logging()
 
 
-# Load configuration
-def load_config(config_file=directory+file_name):
-
+def load_config(config_file='pipeline.conf'):
     parser = configparser.ConfigParser()
     parser.read(config_file)
-    return {
-        'hostname': parser.get("mysql_config", "hostname"),
-        'port': parser.getint("mysql_config", "port"),
-        'username': parser.get("mysql_config", "username"),
-        'dbname': parser.get("mysql_config", "database"),
-        'password': parser.get("mysql_config", "password")
-    }
+    try:
+        config = {
+            'hostname': parser.get("mysql_config", "hostname"),
+            'port': parser.getint("mysql_config", "port"),
+            'username': parser.get("mysql_config", "username"),
+            'dbname': parser.get("mysql_config", "database"),
+            'password': parser.get("mysql_config", "password"),
+            'aws_access_key': parser.get("aws_boto_credentials", "access_key"),
+            'aws_secret_key': parser.get("aws_boto_credentials", "secret_key"),
+            'bucket_name': parser.get("aws_boto_credentials", "bucket_name")
+        }
+    except configparser.NoSectionError as e:
+        logger.error(f"Configuration section missing: {e}")
+        raise
+    except configparser.NoOptionError as e:
+        logger.error(f"Configuration option missing: {e}")
+        raise
+
+    return config
 
 
-# Context manager for MySQL connection
 @contextmanager
 def mysql_connection(config):
     conn = None
@@ -82,10 +79,15 @@ def mysql_connection(config):
 
 
 def main():
+    config = load_config()
+
+    # Check directory and file
+    if not check_directory_and_file("./", "pipeline.conf"):
+        logger.error("Directory or file check failed.")
+        return
+
     try:
-        config = load_config()  # Ensure load_config is defined or imported
-        logger.info(config)
-        with mysql_connection(config) as conn:  # Ensure mysql_connection is defined or imported
+        with mysql_connection(config) as conn:
             m_query = "SELECT * FROM dppr.Orders;"
             local_filename = "order_extract.csv"
 
@@ -97,25 +99,18 @@ def main():
                     csv_w = csv.writer(fp, delimiter='|')
                     csv_w.writerows(results)
 
+            # Upload to S3
+            s3 = boto3.client(
+                's3',
+                aws_access_key_id=config['aws_access_key'],
+                aws_secret_access_key=config['aws_secret_key']
+            )
+            s3_file = local_filename
+            s3.upload_file(local_filename, config['bucket_name'], s3_file)
+
     except Exception as e:
         logger.exception("An error occurred during database operations")
 
+
 if __name__ == "__main__":
     main()
-
-
-# load data to S3 bucket
-
-parser = configparser.ConfigParser()
-parser.read("pipeline.conf")
-access_key = parser.get("aws_boto_credentials", "access_key")
-secret_key =  parser.get("aws_boto_credentials","secret_key")
-bucket_name = parser.get("aws_boto_credentials", "bucket_name")
-
-s3 = boto.clent('s3',
-                aws_access_key = access_key,
-                aws_secret_access_key = secret_key
-                )
-s3_file = local_filename
-
-s3.upload_file(local_filename, bucket_name, s3_file)
